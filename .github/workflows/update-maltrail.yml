@@ -1,0 +1,124 @@
+name: Update Maltrail Ruleset
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Install sing-box
+        run: |
+          VERSION=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases/latest" | jq -r .tag_name)
+          curl -sLo sing-box.tar.gz "https://github.com/SagerNet/sing-box/releases/download/${VERSION}/sing-box-${VERSION#v}-linux-amd64.tar.gz"
+          tar -xzf sing-box.tar.gz
+          sudo mv sing-box-*/sing-box /usr/local/bin/
+          sing-box version
+
+      - name: Download and Compile Rules
+        run: |
+          mkdir -p rule-set
+
+          #--------------------------
+          # 可自由添加 IP/域名来源
+          #--------------------------
+          IP_SOURCES=(
+            "https://raw.githubusercontent.com/stamparm/ipsum/refs/heads/master/levels/1.txt"
+            "https://raw.githubusercontent.com/bryopsida/blocklist/main/ipv4.txt"
+            "https://raw.githubusercontent.com/bryopsida/blocklist/main/ipv6.txt"
+          )
+
+          DOMAIN_SOURCES=(
+            "https://raw.githubusercontent.com/stamparm/aux/master/maltrail-malware-domains.txt"
+            "https://raw.githubusercontent.com/bryopsida/blocklist/main/dns0.txt"
+            "https://raw.githubusercontent.com/bryopsida/blocklist/main/dns1.txt"
+            "https://raw.githubusercontent.com/bryopsida/blocklist/main/dns2.txt"
+            "https://raw.githubusercontent.com/bryopsida/blocklist/main/dns3.txt"
+            "https://raw.githubusercontent.com/jackszb/Pure-Domains/main/merged_domains.txt"
+          )
+
+          # 临时文件
+          IP_MERGED="ip_all.txt"
+          DOMAIN_MERGED="domain_all.txt"
+          IP_JSON="rule-set/maltrail_ip.json"
+          DOMAIN_JSON="rule-set/maltrail_domain.json"
+
+          rm -f "$IP_MERGED" "$DOMAIN_MERGED"
+
+          #--------------------------
+          # 下载并合并 IP
+          #--------------------------
+          echo "⬇️ 下载并合并 IP 列表..."
+          for URL in "${IP_SOURCES[@]}"; do
+            curl -sSL "$URL" >> "$IP_MERGED"
+            echo "" >> "$IP_MERGED"
+          done
+
+          #--------------------------
+          # 下载并合并域名
+          #--------------------------
+          echo "⬇️ 下载并合并域名列表..."
+          for URL in "${DOMAIN_SOURCES[@]}"; do
+            curl -sSL "$URL" >> "$DOMAIN_MERGED"
+            echo "" >> "$DOMAIN_MERGED"
+          done
+
+          #--------------------------
+          # 清洗 IP (IPv4 + IPv6 + CIDR)
+          #--------------------------
+          echo "🔧 清洗 IP（IPv4 + IPv6 强化版）..."
+          grep -v '^#' "$IP_MERGED" | \
+            sed 's/ //g' | \
+            grep -v '^$' | \
+            grep -E '^([0-9]{1,3}\.){3}[0-9]{1,3}(/\d+)?$|^([0-9a-fA-F]{1,4}:){1,7}[0-9a-fA-F]{0,4}(/\d+)?$' | \
+            sort -u > ip_clean.txt
+
+          #--------------------------
+          # 清洗域名
+          #--------------------------
+          echo "🔧 清洗域名（严格合法域名）..."
+          grep -v '^#' "$DOMAIN_MERGED" | \
+            sed 's/ //g' | \
+            grep -v '^$' | \
+            grep -E '^([A-Za-z0-9-]+\.)+[A-Za-z]{2,}$' | \
+            sort -u > domain_clean.txt
+
+          #--------------------------
+          # 生成 JSON
+          #--------------------------
+          echo "📝 生成 IP JSON..."
+          jq -R . ip_clean.txt | jq -s '{ version: 3, rules: [ { ip_cidr: . } ] }' > "$IP_JSON"
+
+          echo "📝 生成域名 JSON..."
+          jq -R . domain_clean.txt | jq -s '{ version: 3, rules: [ { domain_suffix: . } ] }' > "$DOMAIN_JSON"
+
+          #--------------------------
+          # 编译 SRS
+          #--------------------------
+          echo "🔨 编译 SRS 文件..."
+          sing-box rule-set compile "$IP_JSON" -o rule-set/maltrail_ip.srs
+          sing-box rule-set compile "$DOMAIN_JSON" -o rule-set/maltrail_domain.srs
+
+          #--------------------------
+          # 清理临时文件
+          #--------------------------
+          rm -f ip_clean.txt domain_clean.txt "$IP_MERGED" "$DOMAIN_MERGED" "$IP_JSON" "$DOMAIN_JSON"
+
+      - name: Commit and Push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Github Action: update IPv4+IPv6 + domain ruleset 🚀"
+          file_pattern: 'rule-set/*.srs'
