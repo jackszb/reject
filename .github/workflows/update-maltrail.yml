@@ -37,16 +37,10 @@ jobs:
           #--------------------------
           IP_SOURCES=(
             "https://raw.githubusercontent.com/stamparm/ipsum/refs/heads/master/levels/1.txt"
-            "https://raw.githubusercontent.com/bryopsida/blocklist/main/ipv4.txt"
-            "https://raw.githubusercontent.com/bryopsida/blocklist/main/ipv6.txt"
           )
 
           DOMAIN_SOURCES=(
             "https://raw.githubusercontent.com/stamparm/aux/master/maltrail-malware-domains.txt"
-            "https://raw.githubusercontent.com/bryopsida/blocklist/main/dns0.txt"
-            "https://raw.githubusercontent.com/bryopsida/blocklist/main/dns1.txt"
-            "https://raw.githubusercontent.com/bryopsida/blocklist/main/dns2.txt"
-            "https://raw.githubusercontent.com/bryopsida/blocklist/main/dns3.txt"
             "https://raw.githubusercontent.com/jackszb/Pure-Domains/main/merged_domains.txt"
           )
 
