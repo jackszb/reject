@@ -41,7 +41,6 @@ jobs:
 
           DOMAIN_SOURCES=(
             "https://raw.githubusercontent.com/stamparm/aux/master/maltrail-malware-domains.txt"
-            "https://raw.githubusercontent.com/jackszb/Pure-Domains/main/merged_domains.txt"
           )
 
           # 临时文件
